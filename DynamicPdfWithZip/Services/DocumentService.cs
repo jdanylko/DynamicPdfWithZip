@@ -1,8 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using DynamicPdfWithZip.Models;
 using IronPdf;
-using Microsoft.VisualBasic.CompilerServices;
 
 namespace DynamicPdfWithZip.Services
 {
@@ -13,11 +14,59 @@ namespace DynamicPdfWithZip.Services
             return GetTableOfContents();
         }
 
+        public byte[] GetPackage(string path)
+        {
+            // Start off with our "Table of Contents"
+            var fileList = new List<ArchiveFile>
+            {
+                GetTableOfContents()
+            };
+
+            fileList.Add(GetFile($"{path}SwedishChef-InterestingMan.jpg"));
+            fileList.Add(GetFile($"{path}HeaviestObjectsInTheUniverse.jpg"));
+
+            return GeneratePackage(fileList);
+        }
+
+        private byte[] GeneratePackage(List<ArchiveFile> fileList)
+        {
+            byte[] result;
+
+            using (var packageStream = new MemoryStream())
+            {
+                using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Create, true))
+                {
+                    foreach (var virtualFile in fileList)
+                    {
+                        //Create a zip entry for each attachment
+                        var zipFile = archive.CreateEntry(virtualFile.Name + "." + virtualFile.Extension);
+                        using (var sourceFileStream = new MemoryStream(virtualFile.FileBytes))
+                        using (var zipEntryStream = zipFile.Open())
+                        {
+                            sourceFileStream.CopyTo(zipEntryStream);
+                        }
+                    }
+                }
+                result = packageStream.ToArray();
+            }
+
+            return result;
+        }
+
+        private ArchiveFile GetFile(string filePath)
+        {
+            return new ArchiveFile
+            {
+                Name = Path.GetFileNameWithoutExtension(filePath),
+                Extension = Path.GetExtension(filePath).Replace(".",""),
+                FileBytes = File.ReadAllBytes(filePath)
+            };
+        }
+
         private ArchiveFile GetTableOfContents()
         {
             // Test parameter.
             var projectId = 5;
-
             var uri = new Uri("http://localhost:42006/Template/ArchiveHeader/"+projectId);
 
             var pdf = CreatePdf(uri);
